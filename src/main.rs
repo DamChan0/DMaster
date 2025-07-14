@@ -1,5 +1,5 @@
 mod apply;
-mod model;
+mod display_info;
 mod profile;
 mod query;
 
