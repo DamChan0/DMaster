@@ -1,10 +1,25 @@
-[
-  {
-    "device_name": "\\\\.\\DISPLAY1",
-    "width": 2560,
-    "height": 1440,
-    "position_x": 0,
-    "position_y": 0,
-    "orientation": 0
-  }
-]
+{
+  "topology": "Extend",
+  "displays": [
+    {
+      "device_name": "\\\\.\\DISPLAY1",
+      "device_id": "\u0000\\",
+      "device_key": "\\Registry\\Machine\\System\\CurrentControlSet\\Control\\Video\\{55CC6EB9-2725-11F0-8135-010101010000}\\0000",
+      "width": 2560,
+      "height": 1440,
+      "position_x": 0,
+      "position_y": 0,
+      "orientation": 0
+    },
+    {
+      "device_name": "\\\\.\\DISPLAY2",
+      "device_id": "\u0000\\",
+      "device_key": "\\Registry\\Machine\\System\\CurrentControlSet\\Control\\Video\\{55CC6EB9-2725-11F0-8135-010101010000}\\0001",
+      "width": 1920,
+      "height": 1080,
+      "position_x": -1920,
+      "position_y": 0,
+      "orientation": 0
+    }
+  ]
+}

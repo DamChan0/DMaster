@@ -1,2 +1,10 @@
-target/debug/
-target/release/
+target/**/*
+
+*.json
+target/
+*
+!*/
+!*.rs
+!*.toml
+!.gitignore
+!LICENSE
