@@ -3,7 +3,8 @@ use crate::query;
 use std::ptr;
 use winapi::shared::windef::POINTL;
 use winapi::um::wingdi::{
-    DEVMODEW, DISPLAY_DEVICEW, DM_DISPLAYORIENTATION, DM_PELSHEIGHT, DM_PELSWIDTH, DM_POSITION,
+    DEVMODEW, DISPLAY_DEVICE_ACTIVE, DISPLAY_DEVICEW, DM_DISPLAYORIENTATION, DM_PELSHEIGHT,
+    DM_PELSWIDTH, DM_POSITION,
 };
 use winapi::um::winuser::{CDS_RESET, CDS_UPDATEREGISTRY, ChangeDisplaySettingsExW};
 use winapi::um::winuser::{EDD_GET_DEVICE_INTERFACE_NAME, EnumDisplayDevicesW};
@@ -51,10 +52,13 @@ fn query_current_display_names() -> Vec<String> {
         if success == 0 {
             break;
         }
-        let device_name = String::from_utf16_lossy(&device.DeviceName)
-            .trim_end_matches('\0')
-            .to_string();
-        names.push(device_name);
+        // ACTIVE 플래그만 필터
+        if device.StateFlags & DISPLAY_DEVICE_ACTIVE != 0 {
+            let device_name = String::from_utf16_lossy(&device.DeviceName)
+                .trim_end_matches('\0')
+                .to_string();
+            names.push(device_name);
+        }
         device_num += 1;
     }
     names
