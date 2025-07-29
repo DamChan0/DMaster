@@ -1,12 +1,4 @@
-mod apply;
-mod display_info;
-mod profile;
-mod query;
-
-use apply::apply_profile;
-use profile::{profile_detector, save_profile};
-use query::get_display_profile;
-
+use dmaster_core::{apply_profile, get_display_profile, profile_detector, save_profile};
 use std::io::{self, Write};
 
 fn main() {
@@ -20,9 +12,8 @@ fn main() {
 
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
-        let trimmed = input.trim();
 
-        match trimmed {
+        match input.trim() {
             "1" => {
                 print!("저장할 프로필 파일 경로를 입력하세요: ");
                 io::stdout().flush().unwrap();
@@ -46,14 +37,14 @@ fn main() {
                 }
 
                 print!("적용할 프로필 번호 선택: ");
-                std::io::stdout().flush().unwrap();
+                io::stdout().flush().unwrap();
                 let mut sel = String::new();
-                std::io::stdin().read_line(&mut sel).unwrap();
+                io::stdin().read_line(&mut sel).unwrap();
 
                 if let Ok(index) = sel.trim().parse::<usize>() {
                     if let Some(selected) = profiles.get(index) {
                         println!("프로필 {} 적용 중...", selected.name);
-                        apply_profile(&selected.profile); // <- 실제 적용 함수
+                        apply_profile(&selected.profile);
                     } else {
                         println!("잘못된 인덱스입니다.");
                     }
@@ -67,7 +58,5 @@ fn main() {
             _ => println!("잘못된 입력입니다."),
         }
     }
-    println!("Press Enter to exit...");
-    io::stdout().flush().unwrap();
-    let _ = io::stdin().read_line(&mut String::new());
+    println!("프로그램을 종료합니다.");
 }

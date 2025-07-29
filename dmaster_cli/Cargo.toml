@@ -1,0 +1,7 @@
+[package]
+name = "dmaster_cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dmaster_core = { path = "../dmaster_core" }
