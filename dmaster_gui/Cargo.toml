@@ -2,10 +2,11 @@
 name = "dmaster_gui"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [dependencies]
-tauri = { version = "1", features = ["api-all"] }
+tauri = { version = "2.7.0", features = [] }
 dmaster_core = { path = "../dmaster_core" }
 
 [build-dependencies]
-tauri-build = { version = "1", features = [] }
+tauri-build = { version = "2.3.1", features = [] }

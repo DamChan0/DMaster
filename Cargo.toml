@@ -1,3 +1,7 @@
 [workspace]
-members = ["dmaster_core", "dmaster_gui", "dmaster_cli"]
-name = "dmaster_workspace"
+members = [
+  "dmaster_core",
+  "dmaster_gui",
+  "dmaster_cli"
+]
+resolver = "3"      # edition 2024 사용 시 권장

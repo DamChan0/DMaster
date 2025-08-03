@@ -1,9 +1,11 @@
 use crate::display_info::DisplayProfile;
+use serde::{Deserialize, Serialize};
 use serde_json;
 use std::fs;
 
 const PROFILE_HEADER: &str = "DMaster_v0_1_1";
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfileInfo {
     pub name: String,
     pub path: String,
