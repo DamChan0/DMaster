@@ -1,0 +1,408 @@
+import { Button, VerticalBox, HorizontalBox, ListView, StandardListView, GroupBox } from "std-widgets.slint";
+import { SaveDialog } from "save_dialog.slint";
+
+export struct DisplayEntry {
+    name: string,
+    resolution: string,
+    position: string,
+    orientation: string,
+    is-primary: bool,
+}
+
+export struct ProfileEntry {
+    name: string,
+    description: string,
+    display-count: int,
+    created-at: string,
+    topology: string,
+}
+
+export component App inherits Window {
+    title: "DMaster — Monitor Profile Manager";
+    preferred-width: 860px;
+    preferred-height: 560px;
+    background: #1e1f22;
+
+    in-out property <[ProfileEntry]> profiles;
+    in-out property <[DisplayEntry]> selected-displays;
+    in-out property <int> selected-index: -1;
+    in-out property <bool> show-save-dialog: false;
+    in-out property <string> status-message: "Ready";
+    in-out property <bool> status-is-error: false;
+
+    callback refresh-profiles();
+    callback save-profile(string, string);
+    callback apply-profile(string);
+    callback delete-profile(string);
+    callback select-profile(int);
+
+    // Root layout
+    VerticalBox {
+        padding: 0px;
+        spacing: 0px;
+
+        // Header bar
+        Rectangle {
+            height: 52px;
+            background: #2b2d30;
+
+            HorizontalBox {
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 8px;
+                alignment: start;
+
+                Text {
+                    text: "DMaster";
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: #e0e0e0;
+                    vertical-alignment: center;
+                }
+
+                Rectangle { horizontal-stretch: 1; }
+
+                refresh-btn := Button {
+                    text: "⟳ Refresh";
+                    clicked => { root.refresh-profiles(); }
+                }
+
+                save-btn := Button {
+                    text: "＋ Save Current";
+                    primary: true;
+                    clicked => { root.show-save-dialog = true; }
+                }
+            }
+        }
+
+        // Divider
+        Rectangle { height: 1px; background: #3c3f41; }
+
+        // Content: profile list
+        HorizontalBox {
+            padding: 0px;
+            spacing: 0px;
+            vertical-stretch: 1;
+
+            // Profile list panel
+            VerticalBox {
+                width: 300px;
+                padding: 12px;
+                spacing: 8px;
+
+                Text {
+                    text: "Saved Profiles";
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: #9e9e9e;
+                    letter-spacing: 1px;
+                }
+
+                // Profile list
+                list-rect := Rectangle {
+                    vertical-stretch: 1;
+                    border-radius: 6px;
+                    background: #2b2d30;
+                    clip: true;
+
+                    if profiles.length == 0 : VerticalBox {
+                        alignment: center;
+                        Text {
+                            text: "No profiles saved yet.\nClick '+ Save Current' to create one.";
+                            color: #6b6b6b;
+                            font-size: 12px;
+                            horizontal-alignment: center;
+                        }
+                    }
+
+                    if profiles.length > 0 : ListView {
+                        for profile[i] in root.profiles : Rectangle {
+                            height: 60px;
+                            background: i == root.selected-index ? #3a7bd540 : transparent;
+
+                            Rectangle {
+                                x: 0;
+                                y: 0;
+                                width: i == root.selected-index ? 3px : 0px;
+                                height: parent.height;
+                                background: #3a7bd5;
+                            }
+
+                            VerticalBox {
+                                padding-left: i == root.selected-index ? 15px : 12px;
+                                padding-right: 12px;
+                                padding-top: 8px;
+                                padding-bottom: 8px;
+                                spacing: 2px;
+                                alignment: center;
+
+                                Text {
+                                    text: profile.name;
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                    color: i == root.selected-index ? #e0e0e0 : #b0b0b0;
+                                    overflow: elide;
+                                }
+
+                                Text {
+                                    text: profile.description != "" ? profile.description : "(no description)";
+                                    font-size: 11px;
+                                    color: #6b6b6b;
+                                    overflow: elide;
+                                }
+                            }
+
+                            TouchArea {
+                                clicked => {
+                                    root.selected-index = i;
+                                    root.select-profile(i);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Vertical divider
+            Rectangle { width: 1px; background: #3c3f41; }
+
+            // Detail panel
+            VerticalBox {
+                horizontal-stretch: 1;
+                padding: 16px;
+                spacing: 12px;
+
+                if root.selected-index < 0 : VerticalBox {
+                    alignment: center;
+                    Text {
+                        text: "Select a profile to view details";
+                        color: #6b6b6b;
+                        font-size: 14px;
+                        horizontal-alignment: center;
+                    }
+                }
+
+                if root.selected-index >= 0 : VerticalBox {
+                    spacing: 12px;
+
+                    Text {
+                        text: root.profiles[root.selected-index].name;
+                        font-size: 20px;
+                        font-weight: 700;
+                        color: #e0e0e0;
+                    }
+
+                    Text {
+                        text: root.profiles[root.selected-index].description != ""
+                            ? root.profiles[root.selected-index].description
+                            : "(no description)";
+                        font-size: 13px;
+                        color: #9e9e9e;
+                    }
+
+                    HorizontalBox {
+                        spacing: 24px;
+
+                        VerticalBox {
+                            spacing: 4px;
+                            Text { text: "DISPLAYS"; font-size: 10px; color: #6b6b6b; letter-spacing: 1px; }
+                            Text {
+                                text: root.profiles[root.selected-index].display-count;
+                                font-size: 20px;
+                                font-weight: 700;
+                                color: #3a7bd5;
+                            }
+                        }
+
+                        VerticalBox {
+                            spacing: 4px;
+                            Text { text: "TOPOLOGY"; font-size: 10px; color: #6b6b6b; letter-spacing: 1px; }
+                            Text {
+                                text: root.profiles[root.selected-index].topology;
+                                font-size: 13px;
+                                color: #b0b0b0;
+                            }
+                        }
+
+                        VerticalBox {
+                            spacing: 4px;
+                            Text { text: "CREATED"; font-size: 10px; color: #6b6b6b; letter-spacing: 1px; }
+                            Text {
+                                text: root.profiles[root.selected-index].created-at;
+                                font-size: 13px;
+                                color: #b0b0b0;
+                            }
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: #3c3f41; }
+
+                    Text {
+                        text: "Display Configuration";
+                        font-size: 12px;
+                        font-weight: 600;
+                        color: #9e9e9e;
+                        letter-spacing: 1px;
+                    }
+
+                    ListView {
+                        vertical-stretch: 1;
+                        for display[di] in root.selected-displays : Rectangle {
+                            height: 80px;
+                            border-radius: 6px;
+                            background: #2b2d30;
+
+                            HorizontalBox {
+                                padding: 12px;
+                                spacing: 16px;
+
+                                Rectangle {
+                                    width: 40px;
+                                    height: 40px;
+                                    border-radius: 6px;
+                                    background: display.is-primary ? #3a7bd530 : #3c3f4130;
+                                    y: (parent.height - self.height) / 2;
+
+                                    Text {
+                                        text: di + 1;
+                                        font-size: 16px;
+                                        font-weight: 700;
+                                        color: display.is-primary ? #3a7bd5 : #6b6b6b;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                VerticalBox {
+                                    spacing: 4px;
+                                    alignment: center;
+                                    horizontal-stretch: 1;
+
+                                    HorizontalBox {
+                                        spacing: 6px;
+                                        Text {
+                                            text: display.name;
+                                            font-size: 13px;
+                                            font-weight: 600;
+                                            color: #e0e0e0;
+                                        }
+                                        if display.is-primary : Rectangle {
+                                            width: 52px;
+                                            height: 16px;
+                                            border-radius: 3px;
+                                            background: #3a7bd530;
+                                            y: (parent.height - self.height) / 2;
+                                            Text {
+                                                text: "PRIMARY";
+                                                font-size: 9px;
+                                                font-weight: 600;
+                                                color: #3a7bd5;
+                                                letter-spacing: 0.5px;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+                                    }
+
+                                    HorizontalBox {
+                                        spacing: 16px;
+                                        Text {
+                                            text: display.resolution;
+                                            font-size: 11px;
+                                            color: #9e9e9e;
+                                        }
+                                        Text {
+                                            text: "pos " + display.position;
+                                            font-size: 11px;
+                                            color: #6b6b6b;
+                                        }
+                                        if display.orientation != "Normal" : Text {
+                                            text: display.orientation;
+                                            font-size: 11px;
+                                            color: #6b6b6b;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: #3c3f41; }
+
+                    HorizontalBox {
+                        spacing: 8px;
+                        alignment: start;
+
+                        Button {
+                            text: "Apply Profile";
+                            primary: true;
+                            clicked => {
+                                root.apply-profile(root.profiles[root.selected-index].name);
+                            }
+                        }
+
+                        Button {
+                            text: "Delete";
+                            clicked => {
+                                root.delete-profile(root.profiles[root.selected-index].name);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Divider
+        Rectangle { height: 1px; background: #3c3f41; }
+
+        // Status bar
+        Rectangle {
+            height: 28px;
+            background: #2b2d30;
+
+            HorizontalBox {
+                padding-left: 12px;
+                padding-right: 12px;
+                spacing: 6px;
+                alignment: start;
+
+                Rectangle {
+                    width: 6px;
+                    height: 6px;
+                    border-radius: 3px;
+                    background: root.status-is-error ? #e05252 : #52a852;
+                    y: (parent.height - self.height) / 2;
+                }
+
+                Text {
+                    text: root.status-message;
+                    font-size: 11px;
+                    color: root.status-is-error ? #e05252 : #9e9e9e;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+
+    // Save dialog overlay
+    if root.show-save-dialog : Rectangle {
+        background: #00000066;
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+
+        SaveDialog {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+
+            confirmed(name, desc) => {
+                root.save-profile(name, desc);
+                root.show-save-dialog = false;
+            }
+            cancelled => {
+                root.show-save-dialog = false;
+            }
+        }
+    }
+}

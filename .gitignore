@@ -6,5 +6,6 @@ target/
 !*/
 !*.rs
 !*.toml
+!*.slint
 !.gitignore
 !LICENSE

@@ -1,0 +1,54 @@
+import { Button, LineEdit, VerticalBox, HorizontalBox } from "std-widgets.slint";
+
+export component SaveDialog inherits Rectangle {
+    width: 420px;
+    height: 210px;
+    background: #2b2d30;
+    border-radius: 10px;
+    drop-shadow-blur: 24px;
+    drop-shadow-color: #00000099;
+
+    callback confirmed(string, string);
+    callback cancelled();
+
+    VerticalBox {
+        padding: 20px;
+        spacing: 12px;
+
+        Text {
+            text: "Save Current Profile";
+            font-size: 16px;
+            font-weight: 700;
+            color: #e0e0e0;
+        }
+
+        name-edit := LineEdit {
+            placeholder-text: "Profile name (required)";
+            font-size: 13px;
+        }
+
+        desc-edit := LineEdit {
+            placeholder-text: "Description (optional)";
+            font-size: 13px;
+        }
+
+        HorizontalBox {
+            spacing: 8px;
+            alignment: end;
+
+            Button {
+                text: "Cancel";
+                clicked => { root.cancelled(); }
+            }
+
+            Button {
+                text: "Save";
+                primary: true;
+                enabled: name-edit.text != "";
+                clicked => {
+                    root.confirmed(name-edit.text, desc-edit.text);
+                }
+            }
+        }
+    }
+}
