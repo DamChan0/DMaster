@@ -1,5 +1,6 @@
 **/target/**/*
 
+**/out
 *.json
 */target
 *
@@ -10,3 +11,4 @@
 !*.md
 !.gitignore
 !LICENSE
+target/
