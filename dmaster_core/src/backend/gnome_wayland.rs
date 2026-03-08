@@ -28,26 +28,39 @@ for lm in logical_monitors:
             if str(mon_id[0]) != connector:
                 continue
             display_name = str(mon_props.get('display-name', connector))
+            current_mode_id = None
+            available_modes = []
             for mode in modes:
                 mode_id, w, h, refresh, _, _, mode_props = mode
-                if not mode_props.get('is-current', False):
-                    continue
-                displays.append({
-                    'connector': connector,
-                    'vendor': vendor,
-                    'product': product,
-                    'serial': serial_num,
-                    'display_name': display_name,
+                available_modes.append({
                     'mode_id': str(mode_id),
                     'width': int(w),
                     'height': int(h),
-                    'x': int(x),
-                    'y': int(y),
-                    'transform': int(transform),
-                    'scale': float(scale),
-                    'primary': bool(primary),
+                    'refresh': float(refresh),
+                    'is_preferred': bool(mode_props.get('is-preferred', False)),
                 })
-                break
+                if mode_props.get('is-current', False):
+                    current_mode_id = str(mode_id)
+                    current_w = int(w)
+                    current_h = int(h)
+            if current_mode_id is None:
+                continue
+            displays.append({
+                'connector': connector,
+                'vendor': vendor,
+                'product': product,
+                'serial': serial_num,
+                'display_name': display_name,
+                'mode_id': current_mode_id,
+                'width': current_w,
+                'height': current_h,
+                'x': int(x),
+                'y': int(y),
+                'transform': int(transform),
+                'scale': float(scale),
+                'primary': bool(primary),
+                'available_modes': available_modes,
+            })
             break
 
 print(json.dumps({'serial': int(serial), 'displays': displays}))
@@ -131,6 +144,18 @@ struct QueryDisplay {
     transform: u32,
     scale: f64,
     primary: bool,
+    #[serde(default)]
+    available_modes: Vec<AvailableMode>,
+}
+
+#[derive(serde::Deserialize)]
+struct AvailableMode {
+    mode_id: String,
+    width: u32,
+    height: u32,
+    refresh: f64,
+    #[serde(default)]
+    is_preferred: bool,
 }
 
 fn run_python(script: &str) -> Result<String, String> {
@@ -300,5 +325,28 @@ fn find_mode_id_for_resolution(display: &QueryDisplay, width: u32, height: u32) 
     if display.width == width && display.height == height {
         return display.mode_id.clone();
     }
-    format!("{}x{}@60.000", width, height)
+
+    let matching: Vec<&AvailableMode> = display
+        .available_modes
+        .iter()
+        .filter(|m| m.width == width && m.height == height)
+        .collect();
+
+    if matching.is_empty() {
+        return format!("{}x{}@60.000", width, height);
+    }
+
+    if let Some(preferred) = matching.iter().find(|m| m.is_preferred) {
+        return preferred.mode_id.clone();
+    }
+
+    matching
+        .iter()
+        .max_by(|a, b| {
+            a.refresh
+                .partial_cmp(&b.refresh)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|m| m.mode_id.clone())
+        .unwrap_or_else(|| format!("{}x{}@60.000", width, height))
 }
