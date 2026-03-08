@@ -1,0 +1,142 @@
+import { Button, VerticalBox, HorizontalBox, ComboBox, ScrollView } from "std-widgets.slint";
+
+export struct MappingRow {
+    current-name: string,
+    current-resolution: string,
+    profile-options: [string],
+    selected-index: int,
+}
+
+export component MappingDialog inherits Rectangle {
+    width: 560px;
+    min-height: 300px;
+    background: #2b2d30;
+    border-radius: 10px;
+    drop-shadow-blur: 24px;
+    drop-shadow-color: #00000099;
+
+    in-out property <string> profile-name;
+    in-out property <[MappingRow]> rows;
+
+    callback confirmed();
+    callback cancelled();
+    callback selection-changed(int, int);
+
+    VerticalBox {
+        padding: 20px;
+        spacing: 14px;
+
+        Text {
+            text: "Map Displays — " + root.profile-name;
+            font-size: 16px;
+            font-weight: 700;
+            color: #e0e0e0;
+        }
+
+        Text {
+            text: "Assign each current monitor to a profile display configuration.";
+            font-size: 12px;
+            color: #9e9e9e;
+            wrap: word-wrap;
+        }
+
+        Rectangle { height: 1px; background: #3c3f41; }
+
+        HorizontalBox {
+            spacing: 16px;
+            height: 20px;
+
+            Text {
+                text: "CURRENT MONITOR";
+                font-size: 10px;
+                font-weight: 600;
+                color: #6b6b6b;
+                letter-spacing: 1px;
+                horizontal-stretch: 1;
+            }
+
+            Text {
+                text: "APPLY FROM PROFILE";
+                font-size: 10px;
+                font-weight: 600;
+                color: #6b6b6b;
+                letter-spacing: 1px;
+                horizontal-stretch: 1;
+            }
+        }
+
+        ScrollView {
+            vertical-stretch: 1;
+            min-height: 100px;
+
+            VerticalBox {
+                spacing: 8px;
+
+                for row[ri] in root.rows : Rectangle {
+                    height: 56px;
+                    border-radius: 6px;
+                    background: #1e1f22;
+
+                    HorizontalBox {
+                        padding: 12px;
+                        spacing: 16px;
+                        alignment: stretch;
+
+                        VerticalBox {
+                            spacing: 2px;
+                            alignment: center;
+                            horizontal-stretch: 1;
+
+                            Text {
+                                text: row.current-name;
+                                font-size: 13px;
+                                font-weight: 600;
+                                color: #e0e0e0;
+                            }
+
+                            Text {
+                                text: row.current-resolution;
+                                font-size: 11px;
+                                color: #6b6b6b;
+                            }
+                        }
+
+                        Text {
+                            text: "\u{2192}";
+                            font-size: 18px;
+                            color: #3a7bd5;
+                            vertical-alignment: center;
+                        }
+
+                        combo := ComboBox {
+                            horizontal-stretch: 1;
+                            model: row.profile-options;
+                            current-index: row.selected-index;
+                            selected(value) => {
+                                root.selection-changed(ri, combo.current-index);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Rectangle { height: 1px; background: #3c3f41; }
+
+        HorizontalBox {
+            spacing: 8px;
+            alignment: end;
+
+            Button {
+                text: "Cancel";
+                clicked => { root.cancelled(); }
+            }
+
+            Button {
+                text: "Apply with Mapping";
+                primary: true;
+                clicked => { root.confirmed(); }
+            }
+        }
+    }
+}

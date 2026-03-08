@@ -1,5 +1,8 @@
 import { Button, VerticalBox, HorizontalBox, ListView, StandardListView, GroupBox } from "std-widgets.slint";
 import { SaveDialog } from "save_dialog.slint";
+import { MappingDialog, MappingRow } from "mapping_dialog.slint";
+
+export { MappingRow }
 
 export struct DisplayEntry {
     name: string,
@@ -27,6 +30,9 @@ export component App inherits Window {
     in-out property <[DisplayEntry]> selected-displays;
     in-out property <int> selected-index: -1;
     in-out property <bool> show-save-dialog: false;
+    in-out property <bool> show-mapping-dialog: false;
+    in-out property <string> mapping-profile-name;
+    in-out property <[MappingRow]> mapping-rows;
     in-out property <string> status-message: "Ready";
     in-out property <bool> status-is-error: false;
 
@@ -35,6 +41,9 @@ export component App inherits Window {
     callback apply-profile(string);
     callback delete-profile(string);
     callback select-profile(int);
+    callback request-apply(string);
+    callback mapping-confirmed();
+    callback mapping-selection-changed(int, int);
 
     // Root layout
     VerticalBox {
@@ -337,7 +346,7 @@ export component App inherits Window {
                             text: "Apply Profile";
                             primary: true;
                             clicked => {
-                                root.apply-profile(root.profiles[root.selected-index].name);
+                                root.request-apply(root.profiles[root.selected-index].name);
                             }
                         }
 
@@ -402,6 +411,32 @@ export component App inherits Window {
             }
             cancelled => {
                 root.show-save-dialog = false;
+            }
+        }
+    }
+
+    if root.show-mapping-dialog : Rectangle {
+        background: #00000066;
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+
+        MappingDialog {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            profile-name: root.mapping-profile-name;
+            rows: root.mapping-rows;
+
+            confirmed => {
+                root.mapping-confirmed();
+                root.show-mapping-dialog = false;
+            }
+            cancelled => {
+                root.show-mapping-dialog = false;
+            }
+            selection-changed(row-idx, selection-idx) => {
+                root.mapping-selection-changed(row-idx, selection-idx);
             }
         }
     }
