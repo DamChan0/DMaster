@@ -68,12 +68,6 @@ impl DisplayBackend for LinuxDisplayBackend {
 }
 
 fn apply_linux_profile(profile: &DisplayProfile) -> Result<(), String> {
-    if std::env::var("WAYLAND_DISPLAY").is_ok() {
-        return Err(String::from(
-            "Wayland display management is not supported yet; use an X11 session with xrandr",
-        ));
-    }
-
     if profile.displays.is_empty() {
         return Err(String::from(
             "profile does not contain any displays to apply",

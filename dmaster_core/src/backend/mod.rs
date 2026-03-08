@@ -16,8 +16,21 @@ mod windows;
 #[cfg(target_os = "linux")]
 mod linux;
 
+#[cfg(target_os = "linux")]
+mod gnome_wayland;
+
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
 mod unsupported;
+
+fn is_wayland_session() -> bool {
+    std::env::var("WAYLAND_DISPLAY").is_ok()
+}
+
+fn is_gnome_session() -> bool {
+    std::env::var("XDG_CURRENT_DESKTOP")
+        .map(|v| v.to_lowercase().contains("gnome"))
+        .unwrap_or(false)
+}
 
 pub fn get_backend() -> Box<dyn DisplayBackend> {
     #[cfg(target_os = "windows")]
@@ -27,7 +40,11 @@ pub fn get_backend() -> Box<dyn DisplayBackend> {
 
     #[cfg(target_os = "linux")]
     {
-        Box::new(linux::LinuxDisplayBackend)
+        if is_wayland_session() && is_gnome_session() {
+            Box::new(gnome_wayland::GnomeWaylandBackend)
+        } else {
+            Box::new(linux::LinuxDisplayBackend)
+        }
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]
