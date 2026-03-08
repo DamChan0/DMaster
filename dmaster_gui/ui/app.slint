@@ -317,13 +317,13 @@ export component App inherits Window {
 
                                 Rectangle {
                                     horizontal-stretch: 0;
-                                    width: self.preferred-width + 20px;
+                                    min-width: 180px;
                                     height: 32px;
                                     border-radius: 5px;
                                     background: #1e1f22;
                                     y: (parent.height - self.height) / 2;
 
-                                    HorizontalBox {
+                                    HorizontalLayout {
                                         padding-left: 10px;
                                         padding-right: 10px;
                                         spacing: 12px;
