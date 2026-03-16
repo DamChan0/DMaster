@@ -15,53 +15,61 @@ proxy = bus.get_object(
 iface = dbus.Interface(proxy, 'org.gnome.Mutter.DisplayConfig')
 serial, monitors, logical_monitors, props = iface.GetCurrentState()
 
-displays = []
+lm_map = {}
 for lm in logical_monitors:
     x, y, scale, transform, primary, monitor_refs, _ = lm
     for mref in monitor_refs:
-        connector = str(mref[0])
-        vendor = str(mref[1])
-        product = str(mref[2])
-        serial_num = str(mref[3])
-        for mon in monitors:
-            mon_id, modes, mon_props = mon
-            if str(mon_id[0]) != connector:
-                continue
-            display_name = str(mon_props.get('display-name', connector))
-            current_mode_id = None
-            available_modes = []
-            for mode in modes:
-                mode_id, w, h, refresh, _, _, mode_props = mode
-                available_modes.append({
-                    'mode_id': str(mode_id),
-                    'width': int(w),
-                    'height': int(h),
-                    'refresh': float(refresh),
-                    'is_preferred': bool(mode_props.get('is-preferred', False)),
-                })
-                if mode_props.get('is-current', False):
-                    current_mode_id = str(mode_id)
-                    current_w = int(w)
-                    current_h = int(h)
-            if current_mode_id is None:
-                continue
-            displays.append({
-                'connector': connector,
-                'vendor': vendor,
-                'product': product,
-                'serial': serial_num,
-                'display_name': display_name,
-                'mode_id': current_mode_id,
-                'width': current_w,
-                'height': current_h,
-                'x': int(x),
-                'y': int(y),
-                'transform': int(transform),
-                'scale': float(scale),
-                'primary': bool(primary),
-                'available_modes': available_modes,
-            })
-            break
+        lm_map[str(mref[0])] = {'x': int(x), 'y': int(y), 'scale': float(scale), 'transform': int(transform), 'primary': bool(primary)}
+
+displays = []
+for mon in monitors:
+    mon_id, modes, mon_props = mon
+    connector = str(mon_id[0])
+    vendor = str(mon_id[1])
+    product = str(mon_id[2])
+    serial_num = str(mon_id[3])
+    display_name = str(mon_props.get('display-name', connector))
+    current_mode_id = None
+    current_w = 0
+    current_h = 0
+    available_modes = []
+    for mode in modes:
+        mode_id, w, h, refresh, _, _, mode_props = mode
+        available_modes.append({
+            'mode_id': str(mode_id),
+            'width': int(w),
+            'height': int(h),
+            'refresh': float(refresh),
+            'is_preferred': bool(mode_props.get('is-preferred', False)),
+        })
+        if mode_props.get('is-current', False):
+            current_mode_id = str(mode_id)
+            current_w = int(w)
+            current_h = int(h)
+    lm_info = lm_map.get(connector, {})
+    if current_mode_id is None and available_modes:
+        pref = next((m for m in available_modes if m['is_preferred']), available_modes[0])
+        current_mode_id = pref['mode_id']
+        current_w = pref['width']
+        current_h = pref['height']
+    if current_mode_id is None:
+        continue
+    displays.append({
+        'connector': connector,
+        'vendor': vendor,
+        'product': product,
+        'serial': serial_num,
+        'display_name': display_name,
+        'mode_id': current_mode_id,
+        'width': current_w,
+        'height': current_h,
+        'x': lm_info.get('x', 0),
+        'y': lm_info.get('y', 0),
+        'transform': lm_info.get('transform', 0),
+        'scale': lm_info.get('scale', 1.0),
+        'primary': lm_info.get('primary', False),
+        'available_modes': available_modes,
+    })
 
 print(json.dumps({'serial': int(serial), 'displays': displays}))
 "#;
