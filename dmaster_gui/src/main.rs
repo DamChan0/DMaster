@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use dmaster_core::{
     apply_profile, apply_profile_with_mapping, delete_profile, get_display_profile, load_profiles,
     save_profile, DisplayMapping, DisplayTopology,
@@ -390,6 +392,22 @@ fn main() {
                 }
             }
         }
+    });
+
+    let app_weak = app.as_weak();
+    app.window().on_close_requested(move || {
+        if let Some(app) = app_weak.upgrade() {
+            app.set_show_quit_dialog(true);
+        }
+        slint::CloseRequestResponse::KeepWindowShown
+    });
+
+    let app_weak = app.as_weak();
+    app.on_confirm_quit(move || {
+        if let Some(app) = app_weak.upgrade() {
+            app.hide().ok();
+        }
+        slint::quit_event_loop().ok();
     });
 
     app.run().expect("Slint event loop failed");

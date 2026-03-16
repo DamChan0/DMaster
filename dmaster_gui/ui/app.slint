@@ -36,8 +36,10 @@ export component App inherits Window {
     in-out property <[MappingRow]> mapping-rows;
     in-out property <string> status-message: "Ready";
     in-out property <bool> status-is-error: false;
+    in-out property <bool> show-quit-dialog: false;
 
     callback refresh-profiles();
+    callback confirm-quit();
     callback save-profile(string, string);
     callback apply-profile(string);
     callback delete-profile(string);
@@ -500,6 +502,61 @@ export component App inherits Window {
             }
             output-toggled(row-idx, enabled) => {
                 root.mapping-output-toggled(row-idx, enabled);
+            }
+        }
+    }
+
+    if root.show-quit-dialog : Rectangle {
+        background: #00000088;
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 340px;
+            height: 150px;
+            background: #2b2d30;
+            border-radius: 10px;
+            drop-shadow-blur: 24px;
+            drop-shadow-color: #00000099;
+
+            VerticalBox {
+                padding: 24px;
+                spacing: 16px;
+
+                Text {
+                    text: "Quit DMaster?";
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: #e0e0e0;
+                    horizontal-alignment: center;
+                }
+
+                Text {
+                    text: "Are you sure you want to exit?";
+                    font-size: 12px;
+                    color: #9e9e9e;
+                    horizontal-alignment: center;
+                }
+
+                HorizontalBox {
+                    spacing: 8px;
+                    alignment: center;
+
+                    Button {
+                        text: "Cancel";
+                        clicked => { root.show-quit-dialog = false; }
+                    }
+
+                    Button {
+                        text: "Quit";
+                        primary: true;
+                        clicked => { root.confirm-quit(); }
+                    }
+                }
             }
         }
     }
