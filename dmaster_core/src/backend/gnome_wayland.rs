@@ -213,6 +213,7 @@ impl DisplayBackend for GnomeWaylandBackend {
                 position_x: d.x,
                 position_y: d.y,
                 orientation: transform_to_orientation(d.transform),
+                enabled: true,
             })
             .collect();
 
@@ -233,8 +234,14 @@ impl DisplayBackend for GnomeWaylandBackend {
     fn apply_profile(&self, profile: &DisplayProfile) -> Result<(), String> {
         let state = query_current_state()?;
 
-        let entries: Vec<ApplyEntry> = profile
-            .displays
+        let enabled_displays: Vec<&DisplayConfig> =
+            profile.displays.iter().filter(|d| d.enabled).collect();
+
+        if enabled_displays.is_empty() {
+            return Err(String::from("no enabled displays in profile"));
+        }
+
+        let entries: Vec<ApplyEntry> = enabled_displays
             .iter()
             .enumerate()
             .map(|(i, d)| {
@@ -311,6 +318,7 @@ impl DisplayBackend for GnomeWaylandBackend {
                 position_x: source.position_x,
                 position_y: source.position_y,
                 orientation: source.orientation,
+                enabled: source.enabled,
             });
         }
 

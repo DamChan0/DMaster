@@ -1,4 +1,4 @@
-import { Button, VerticalBox, HorizontalBox, ListView, StandardListView, GroupBox } from "std-widgets.slint";
+import { Button, VerticalBox, HorizontalBox, ListView, StandardListView, GroupBox, CheckBox } from "std-widgets.slint";
 import { SaveDialog } from "save_dialog.slint";
 import { MappingDialog, MappingRow } from "mapping_dialog.slint";
 
@@ -10,6 +10,7 @@ export struct DisplayEntry {
     position: string,
     orientation: string,
     is-primary: bool,
+    is-enabled: bool,
 }
 
 export struct ProfileEntry {
@@ -44,6 +45,8 @@ export component App inherits Window {
     callback request-apply(string);
     callback mapping-confirmed();
     callback mapping-selection-changed(int, int);
+    callback mapping-output-toggled(int, bool);
+    callback display-toggled(int, bool);
 
     // Root layout
     VerticalBox {
@@ -257,13 +260,29 @@ export component App inherits Window {
                     ListView {
                         vertical-stretch: 1;
                         for display[di] in root.selected-displays : Rectangle {
-                            height: 56px;
-                            border-radius: 6px;
-                            background: #2b2d30;
+                            height: 64px;
+                            background: transparent;
+
+                            Rectangle {
+                                x: 0;
+                                y: 0;
+                                width: parent.width;
+                                height: 56px;
+                                border-radius: 6px;
+                                background: display.is-enabled ? #2b2d30 : #2b2d3060;
+                                opacity: display.is-enabled ? 1.0 : 0.5;
 
                             HorizontalBox {
                                 padding: 8px;
                                 spacing: 12px;
+
+                                display-cb := CheckBox {
+                                    width: 24px;
+                                    checked: display.is-enabled;
+                                    toggled => {
+                                        root.display-toggled(di, display-cb.checked);
+                                    }
+                                }
 
                                 Rectangle {
                                     width: 32px;
@@ -291,11 +310,11 @@ export component App inherits Window {
                                         text: display.name;
                                         font-size: 13px;
                                         font-weight: 600;
-                                        color: #e0e0e0;
+                                        color: display.is-enabled ? #e0e0e0 : #6b6b6b;
                                         vertical-alignment: center;
                                     }
 
-                                    if display.is-primary : Rectangle {
+                                    if display.is-primary && display.is-enabled : Rectangle {
                                         width: 52px;
                                         height: 16px;
                                         border-radius: 3px;
@@ -306,6 +325,23 @@ export component App inherits Window {
                                             font-size: 9px;
                                             font-weight: 600;
                                             color: #3a7bd5;
+                                            letter-spacing: 0.5px;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    if !display.is-enabled : Rectangle {
+                                        width: 28px;
+                                        height: 16px;
+                                        border-radius: 3px;
+                                        background: #e0525230;
+                                        y: (parent.height - self.height) / 2;
+                                        Text {
+                                            text: "OFF";
+                                            font-size: 9px;
+                                            font-weight: 600;
+                                            color: #e05252;
                                             letter-spacing: 0.5px;
                                             horizontal-alignment: center;
                                             vertical-alignment: center;
@@ -351,6 +387,7 @@ export component App inherits Window {
                                     }
                                 }
                             }
+                            }
                         }
                     }
 
@@ -384,12 +421,15 @@ export component App inherits Window {
 
         // Status bar
         Rectangle {
-            height: 28px;
-            background: #2b2d30;
+            min-height: 28px;
+            max-height: root.status-is-error ? 80px : 28px;
+            background: root.status-is-error ? #2a1a1a : #2b2d30;
 
             HorizontalBox {
                 padding-left: 12px;
                 padding-right: 12px;
+                padding-top: 6px;
+                padding-bottom: 6px;
                 spacing: 6px;
                 alignment: start;
 
@@ -398,14 +438,16 @@ export component App inherits Window {
                     height: 6px;
                     border-radius: 3px;
                     background: root.status-is-error ? #e05252 : #52a852;
-                    y: (parent.height - self.height) / 2;
+                    y: 8px;
                 }
 
                 Text {
                     text: root.status-message;
                     font-size: 11px;
                     color: root.status-is-error ? #e05252 : #9e9e9e;
-                    vertical-alignment: center;
+                    wrap: word-wrap;
+                    vertical-alignment: top;
+                    horizontal-stretch: 1;
                 }
             }
         }
@@ -455,6 +497,9 @@ export component App inherits Window {
             }
             selection-changed(row-idx, selection-idx) => {
                 root.mapping-selection-changed(row-idx, selection-idx);
+            }
+            output-toggled(row-idx, enabled) => {
+                root.mapping-output-toggled(row-idx, enabled);
             }
         }
     }

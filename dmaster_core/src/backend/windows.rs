@@ -208,6 +208,7 @@ fn get_display_profile_impl() -> Result<DisplayProfile, String> {
                 position_x,
                 position_y,
                 orientation,
+                enabled: true,
             });
         }
 
@@ -227,9 +228,13 @@ fn apply_resolved_profile(profile: &DisplayProfile) -> Result<(), String> {
         ));
     }
 
-    let current_display_names = query_current_display_names();
+    if !profile.displays.iter().any(|d| d.enabled) {
+        return Err(String::from("no enabled displays in profile"));
+    }
+
+    let all_display_names = query_all_display_names();
     for display in &profile.displays {
-        if !current_display_names
+        if !all_display_names
             .iter()
             .any(|name| name == &display.device_name)
         {
@@ -250,7 +255,11 @@ fn apply_resolved_profile(profile: &DisplayProfile) -> Result<(), String> {
     }
 
     for display in &profile.displays {
-        apply_single_display(display)?;
+        if display.enabled {
+            apply_single_display(display)?;
+        } else {
+            detach_display(display)?;
+        }
     }
 
     Ok(())
@@ -295,6 +304,73 @@ fn apply_single_display(display_config: &DisplayConfig) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn detach_display(display_config: &DisplayConfig) -> Result<(), String> {
+    let mut devmode: DEVMODEW = unsafe { std::mem::zeroed() };
+    devmode.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
+    devmode.dmPelsWidth = 0;
+    devmode.dmPelsHeight = 0;
+    devmode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_POSITION;
+
+    unsafe {
+        let state = devmode.u1.s2_mut();
+        state.dmPosition = POINTL { x: 0, y: 0 };
+    }
+
+    let device_w: Vec<u16> = display_config
+        .device_name
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let status = unsafe {
+        ChangeDisplaySettingsExW(
+            device_w.as_ptr(),
+            &mut devmode,
+            ptr::null_mut(),
+            CDS_UPDATEREGISTRY,
+            ptr::null_mut(),
+        )
+    };
+
+    if status != 0 {
+        return Err(format!(
+            "failed to detach display '{}' with status code {}",
+            display_config.device_name, status
+        ));
+    }
+
+    Ok(())
+}
+
+fn query_all_display_names() -> Vec<String> {
+    let mut names = vec![];
+    let mut device_num = 0;
+
+    loop {
+        let mut device: DISPLAY_DEVICEW = unsafe { std::mem::zeroed() };
+        device.cb = std::mem::size_of::<DISPLAY_DEVICEW>() as u32;
+        let success = unsafe {
+            EnumDisplayDevicesW(
+                ptr::null(),
+                device_num,
+                &mut device,
+                EDD_GET_DEVICE_INTERFACE_NAME,
+            )
+        };
+        if success == 0 {
+            break;
+        }
+
+        let device_name = String::from_utf16_lossy(&device.DeviceName)
+            .trim_end_matches('\0')
+            .to_string();
+        names.push(device_name);
+
+        device_num += 1;
+    }
+
+    names
 }
 
 fn query_current_display_names() -> Vec<String> {
@@ -346,5 +422,6 @@ fn merge_display_config(
         position_x: source_display.position_x,
         position_y: source_display.position_y,
         orientation: source_display.orientation,
+        enabled: source_display.enabled,
     }
 }

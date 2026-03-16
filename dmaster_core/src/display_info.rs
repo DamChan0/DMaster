@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+fn default_enabled() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DisplayConfig {
     pub label: Option<String>,
@@ -11,6 +15,8 @@ pub struct DisplayConfig {
     pub position_x: i32,
     pub position_y: i32,
     pub orientation: u32,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

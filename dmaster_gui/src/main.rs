@@ -2,7 +2,7 @@ use dmaster_core::{
     apply_profile, apply_profile_with_mapping, delete_profile, get_display_profile, load_profiles,
     save_profile, DisplayMapping, DisplayTopology,
 };
-use slint::{ModelRc, SharedString, VecModel};
+use slint::{Model, ModelRc, SharedString, VecModel};
 use std::rc::Rc;
 
 slint::include_modules!();
@@ -82,6 +82,7 @@ fn displays_for_profile(info: &dmaster_core::ProfileInfo) -> Vec<DisplayEntry> {
             position: format!("{}, {}", d.position_x, d.position_y).into(),
             orientation: SharedString::from(orientation_label(d.orientation)),
             is_primary: i == 0,
+            is_enabled: d.enabled,
         })
         .collect()
 }
@@ -109,6 +110,8 @@ fn main() {
     let mapping_model: Rc<VecModel<MappingRow>> = Rc::new(VecModel::default());
     let mapping_selections: Rc<std::cell::RefCell<Vec<i32>>> =
         Rc::new(std::cell::RefCell::new(vec![]));
+    let mapping_enabled: Rc<std::cell::RefCell<Vec<bool>>> =
+        Rc::new(std::cell::RefCell::new(vec![]));
     let pending_mapping_profile: Rc<std::cell::RefCell<Option<String>>> =
         Rc::new(std::cell::RefCell::new(None));
 
@@ -125,6 +128,14 @@ fn main() {
             display_model_clone.set_vec(displays_for_profile(info));
         } else {
             display_model_clone.set_vec(vec![]);
+        }
+    });
+
+    let display_model_clone = display_model.clone();
+    app.on_display_toggled(move |di: i32, enabled: bool| {
+        if let Some(mut entry) = display_model_clone.row_data(di as usize) {
+            entry.is_enabled = enabled;
+            display_model_clone.set_row_data(di as usize, entry);
         }
     });
 
@@ -198,21 +209,8 @@ fn main() {
     });
 
     let app_weak = app.as_weak();
-    let mapping_model_clone = mapping_model.clone();
-    let mapping_selections_clone = mapping_selections.clone();
-    let pending_mapping_profile_clone = pending_mapping_profile.clone();
+    let display_model_clone = display_model.clone();
     app.on_request_apply(move |name: SharedString| {
-        let current = match get_display_profile() {
-            Ok(p) => p,
-            Err(e) => {
-                if let Some(app) = app_weak.upgrade() {
-                    app.set_status_message(format!("Failed to query displays: {e}").into());
-                    app.set_status_is_error(true);
-                }
-                return;
-            }
-        };
-
         let profile_info = match dmaster_core::load_profile_by_name(name.as_str()) {
             Ok(p) => p,
             Err(e) => {
@@ -224,57 +222,25 @@ fn main() {
             }
         };
 
-        let connectors_match = current.displays.len() == profile_info.profile.displays.len()
-            && current
-                .displays
-                .iter()
-                .zip(profile_info.profile.displays.iter())
-                .all(|(c, p)| c.device_name == p.device_name);
-
-        if connectors_match {
-            let result = apply_profile(&profile_info.profile.to_display_profile());
-            if let Some(app) = app_weak.upgrade() {
-                match result {
-                    Ok(()) => {
-                        app.set_status_message(format!("Applied '{}'", name.as_str()).into());
-                        app.set_status_is_error(false);
-                    }
-                    Err(e) => {
-                        app.set_status_message(format!("Apply failed: {e}").into());
-                        app.set_status_is_error(true);
-                    }
-                }
+        let mut profile_to_apply = profile_info.profile.to_display_profile();
+        for (i, display) in profile_to_apply.displays.iter_mut().enumerate() {
+            if let Some(entry) = display_model_clone.row_data(i) {
+                display.enabled = entry.is_enabled;
             }
-            return;
         }
 
-        let profile_options = build_profile_options(&profile_info);
-        let rows: Vec<MappingRow> = current
-            .displays
-            .iter()
-            .map(|d| {
-                let label = d.label.as_deref().unwrap_or(d.device_name.as_str());
-                MappingRow {
-                    current_name: SharedString::from(label),
-                    current_resolution: format!("{}x{}", d.width, d.height).into(),
-                    profile_options: ModelRc::from(Rc::new(VecModel::from(
-                        profile_options.clone(),
-                    ))),
-                    selected_index: 0,
-                }
-            })
-            .collect();
-
-        let initial_selections = vec![0i32; rows.len()];
-        *mapping_selections_clone.borrow_mut() = initial_selections;
-        *pending_mapping_profile_clone.borrow_mut() = Some(name.to_string());
-        mapping_model_clone.set_vec(rows);
-
+        let result = apply_profile(&profile_to_apply);
         if let Some(app) = app_weak.upgrade() {
-            app.set_mapping_profile_name(name.clone());
-            app.set_show_mapping_dialog(true);
-            app.set_status_message("Configure display mapping...".into());
-            app.set_status_is_error(false);
+            match result {
+                Ok(()) => {
+                    app.set_status_message(format!("Applied '{}'", name.as_str()).into());
+                    app.set_status_is_error(false);
+                }
+                Err(e) => {
+                    app.set_status_message(format!("Apply failed: {e}").into());
+                    app.set_status_is_error(true);
+                }
+            }
         }
     });
 
@@ -286,8 +252,17 @@ fn main() {
         }
     });
 
+    let mapping_enabled_clone = mapping_enabled.clone();
+    app.on_mapping_output_toggled(move |row_idx: i32, enabled: bool| {
+        let mut enabled_vec = mapping_enabled_clone.borrow_mut();
+        if let Some(slot) = enabled_vec.get_mut(row_idx as usize) {
+            *slot = enabled;
+        }
+    });
+
     let app_weak = app.as_weak();
     let mapping_selections_clone = mapping_selections.clone();
+    let mapping_enabled_clone = mapping_enabled.clone();
     let pending_mapping_profile_clone = pending_mapping_profile.clone();
     app.on_mapping_confirmed(move || {
         let profile_name = match pending_mapping_profile_clone.borrow().clone() {
@@ -318,9 +293,18 @@ fn main() {
         };
 
         let selections = mapping_selections_clone.borrow();
+        let enabled_vec = mapping_enabled_clone.borrow();
         let mut mappings = Vec::new();
+        let mut disabled_display_names = Vec::new();
 
         for (i, &sel) in selections.iter().enumerate() {
+            let is_enabled = enabled_vec.get(i).copied().unwrap_or(true);
+            if !is_enabled {
+                if let Some(display) = current.displays.get(i) {
+                    disabled_display_names.push(display.device_name.clone());
+                }
+                continue;
+            }
             if sel == 0 {
                 continue;
             }
@@ -333,16 +317,38 @@ fn main() {
             }
         }
 
-        if mappings.is_empty() {
+        if mappings.is_empty() && disabled_display_names.is_empty() {
             if let Some(app) = app_weak.upgrade() {
-                app.set_status_message("No mappings selected".into());
+                app.set_status_message("No mappings or changes selected".into());
                 app.set_status_is_error(true);
             }
             return;
         }
 
-        let result =
+        let mut result =
             apply_profile_with_mapping(&profile_info.profile.to_display_profile(), &mappings);
+
+        if result.is_ok() && !disabled_display_names.is_empty() {
+            let disabled_profile = dmaster_core::DisplayProfile {
+                topology: profile_info.profile.topology.clone(),
+                displays: disabled_display_names
+                    .iter()
+                    .map(|name| dmaster_core::DisplayConfig {
+                        label: None,
+                        device_name: name.clone(),
+                        device_id: String::new(),
+                        device_key: String::new(),
+                        width: 0,
+                        height: 0,
+                        position_x: 0,
+                        position_y: 0,
+                        orientation: 0,
+                        enabled: false,
+                    })
+                    .collect(),
+            };
+            result = apply_profile(&disabled_profile);
+        }
 
         if let Some(app) = app_weak.upgrade() {
             match result {

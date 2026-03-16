@@ -137,13 +137,20 @@ fn apply_with_manual_mapping(selected_profile: &dmaster_core::ProfileInfo) -> Re
     }
 
     let mut mappings = Vec::new();
+    let mut disabled_names = Vec::new();
+
     for current_display in &current_profile.displays {
         let answer = prompt(&format!(
-            "Map current display '{}' to profile display index (blank to skip): ",
+            "Map current display '{}' (index, 'off' to disable, blank to skip): ",
             current_display.device_name
         ));
         let trimmed_answer = answer.trim();
         if trimmed_answer.is_empty() {
+            continue;
+        }
+
+        if trimmed_answer.eq_ignore_ascii_case("off") {
+            disabled_names.push(current_display.device_name.clone());
             continue;
         }
 
@@ -156,11 +163,37 @@ fn apply_with_manual_mapping(selected_profile: &dmaster_core::ProfileInfo) -> Re
         });
     }
 
-    if mappings.is_empty() {
+    if mappings.is_empty() && disabled_names.is_empty() {
         return Err(String::from("no display mappings were selected"));
     }
 
-    apply_profile_with_mapping(&selected_profile.profile.to_display_profile(), &mappings)
+    if !mappings.is_empty() {
+        apply_profile_with_mapping(&selected_profile.profile.to_display_profile(), &mappings)?;
+    }
+
+    if !disabled_names.is_empty() {
+        let disabled_profile = dmaster_core::DisplayProfile {
+            topology: selected_profile.profile.topology.clone(),
+            displays: disabled_names
+                .iter()
+                .map(|name| dmaster_core::DisplayConfig {
+                    label: None,
+                    device_name: name.clone(),
+                    device_id: String::new(),
+                    device_key: String::new(),
+                    width: 0,
+                    height: 0,
+                    position_x: 0,
+                    position_y: 0,
+                    orientation: 0,
+                    enabled: false,
+                })
+                .collect(),
+        };
+        apply_profile(&disabled_profile)?;
+    }
+
+    Ok(())
 }
 
 fn delete_profile_flow() {

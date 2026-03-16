@@ -1,15 +1,16 @@
-import { Button, VerticalBox, HorizontalBox, ComboBox, ScrollView } from "std-widgets.slint";
+import { Button, VerticalBox, HorizontalBox, ComboBox, ScrollView, CheckBox } from "std-widgets.slint";
 
 export struct MappingRow {
     current-name: string,
     current-resolution: string,
     profile-options: [string],
     selected-index: int,
+    output-enabled: bool,
 }
 
 export component MappingDialog inherits Rectangle {
-    width: 560px;
-    min-height: 300px;
+    width: 600px;
+    min-height: 320px;
     background: #2b2d30;
     border-radius: 10px;
     drop-shadow-blur: 24px;
@@ -21,6 +22,7 @@ export component MappingDialog inherits Rectangle {
     callback confirmed();
     callback cancelled();
     callback selection-changed(int, int);
+    callback output-toggled(int, bool);
 
     VerticalBox {
         padding: 20px;
@@ -34,7 +36,7 @@ export component MappingDialog inherits Rectangle {
         }
 
         Text {
-            text: "Assign each current monitor to a profile display configuration.";
+            text: "Assign each monitor to a profile config. Toggle output to enable/disable the display.";
             font-size: 12px;
             color: #9e9e9e;
             wrap: word-wrap;
@@ -43,8 +45,17 @@ export component MappingDialog inherits Rectangle {
         Rectangle { height: 1px; background: #3c3f41; }
 
         HorizontalBox {
-            spacing: 16px;
+            spacing: 12px;
             height: 20px;
+
+            Text {
+                text: "OUTPUT";
+                font-size: 10px;
+                font-weight: 600;
+                color: #6b6b6b;
+                letter-spacing: 1px;
+                width: 56px;
+            }
 
             Text {
                 text: "CURRENT MONITOR";
@@ -75,12 +86,20 @@ export component MappingDialog inherits Rectangle {
                 for row[ri] in root.rows : Rectangle {
                     height: 56px;
                     border-radius: 6px;
-                    background: #1e1f22;
+                    background: row.output-enabled ? #1e1f22 : #1e1f2280;
 
                     HorizontalBox {
                         padding: 12px;
-                        spacing: 16px;
+                        spacing: 12px;
                         alignment: stretch;
+
+                        cb := CheckBox {
+                            width: 32px;
+                            checked: row.output-enabled;
+                            toggled => {
+                                root.output-toggled(ri, cb.checked);
+                            }
+                        }
 
                         VerticalBox {
                             spacing: 2px;
@@ -91,20 +110,20 @@ export component MappingDialog inherits Rectangle {
                                 text: row.current-name;
                                 font-size: 13px;
                                 font-weight: 600;
-                                color: #e0e0e0;
+                                color: row.output-enabled ? #e0e0e0 : #4a4a4a;
                             }
 
                             Text {
                                 text: row.current-resolution;
                                 font-size: 11px;
-                                color: #6b6b6b;
+                                color: row.output-enabled ? #6b6b6b : #3a3a3a;
                             }
                         }
 
                         Text {
-                            text: "\u{2192}";
+                            text: row.output-enabled ? "\u{2192}" : "\u{2715}";
                             font-size: 18px;
-                            color: #3a7bd5;
+                            color: row.output-enabled ? #3a7bd5 : #4a4a4a;
                             vertical-alignment: center;
                         }
 
@@ -112,6 +131,7 @@ export component MappingDialog inherits Rectangle {
                             horizontal-stretch: 1;
                             model: row.profile-options;
                             current-index: row.selected-index;
+                            enabled: row.output-enabled;
                             selected(value) => {
                                 root.selection-changed(ri, combo.current-index);
                             }

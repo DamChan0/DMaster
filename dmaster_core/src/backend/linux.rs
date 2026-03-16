@@ -57,6 +57,7 @@ impl DisplayBackend for LinuxDisplayBackend {
                 position_x: source_display.position_x,
                 position_y: source_display.position_y,
                 orientation: source_display.orientation,
+                enabled: source_display.enabled,
             });
         }
 
@@ -74,16 +75,24 @@ fn apply_linux_profile(profile: &DisplayProfile) -> Result<(), String> {
         ));
     }
 
+    if !profile.displays.iter().any(|d| d.enabled) {
+        return Err(String::from("no enabled displays in profile"));
+    }
+
     let mut args: Vec<String> = Vec::new();
     for display in &profile.displays {
         args.push(String::from("--output"));
         args.push(display.device_name.clone());
-        args.push(String::from("--mode"));
-        args.push(format!("{}x{}", display.width, display.height));
-        args.push(String::from("--pos"));
-        args.push(format!("{}x{}", display.position_x, display.position_y));
-        args.push(String::from("--rotate"));
-        args.push(rotation_to_xrandr(display.orientation).to_string());
+        if display.enabled {
+            args.push(String::from("--mode"));
+            args.push(format!("{}x{}", display.width, display.height));
+            args.push(String::from("--pos"));
+            args.push(format!("{}x{}", display.position_x, display.position_y));
+            args.push(String::from("--rotate"));
+            args.push(rotation_to_xrandr(display.orientation).to_string());
+        } else {
+            args.push(String::from("--off"));
+        }
     }
 
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -155,6 +164,7 @@ fn parse_xrandr_query(output: &str) -> Result<DisplayProfile, String> {
             position_x,
             position_y,
             orientation: 0,
+            enabled: true,
         });
     }
 
