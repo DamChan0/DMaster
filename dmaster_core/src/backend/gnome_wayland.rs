@@ -175,10 +175,27 @@ fn run_python(script: &str) -> Result<String, String> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Mutter D-Bus query failed: {}", stderr.trim()));
+        return Err(format_python_error(stderr.trim()));
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn format_python_error(stderr: &str) -> String {
+    if let Some(line) = stderr.lines().rev().find(|line| !line.trim().is_empty()) {
+        let message = line.split(": ").skip(1).collect::<Vec<_>>().join(": ");
+
+        if !message.is_empty() {
+            if message.contains("Refusing to activate a closed laptop panel") {
+                return String::from(
+                    "cannot enable the built-in display because the laptop panel is closed",
+                );
+            }
+            return format!("Mutter D-Bus apply failed: {message}");
+        }
+    }
+
+    format!("Mutter D-Bus apply failed: {stderr}")
 }
 
 fn query_current_state() -> Result<QueryResult, String> {

@@ -1,0 +1,9 @@
+[book]
+title = "DMaster Rust Learning Curriculum"
+authors = ["Damchan"]
+language = "ko"
+src = "docs/curriculum"
+
+[build]
+build-dir = "book"
+create-missing = false
