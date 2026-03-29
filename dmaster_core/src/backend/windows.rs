@@ -4,11 +4,12 @@ use std::ptr;
 use winapi::shared::windef::POINTL;
 use winapi::um::wingdi::{
     DEVMODEW, DISPLAYCONFIG_MODE_INFO, DISPLAYCONFIG_PATH_INFO, DISPLAY_DEVICEW,
-    DISPLAY_DEVICE_ACTIVE, DM_DISPLAYORIENTATION, DM_PELSHEIGHT, DM_PELSWIDTH, DM_POSITION,
+    DISPLAY_DEVICE_ACTIVE, DISPLAY_DEVICE_PRIMARY_DEVICE, DM_DISPLAYORIENTATION, DM_PELSHEIGHT,
+    DM_PELSWIDTH, DM_POSITION,
 };
 use winapi::um::winuser::{
-    ChangeDisplaySettingsExW, EnumDisplayDevicesW, EnumDisplaySettingsW, CDS_RESET,
-    CDS_UPDATEREGISTRY, EDD_GET_DEVICE_INTERFACE_NAME,
+    ChangeDisplaySettingsExW, EnumDisplayDevicesW, EnumDisplaySettingsW, CDS_NORESET, CDS_RESET,
+    CDS_SET_PRIMARY, CDS_UPDATEREGISTRY, EDD_GET_DEVICE_INTERFACE_NAME,
 };
 
 const SDC_TOPOLOGY_INTERNAL: u32 = 0x00000001;
@@ -17,6 +18,8 @@ const SDC_TOPOLOGY_EXTEND: u32 = 0x00000004;
 const SDC_TOPOLOGY_EXTERNAL: u32 = 0x00000008;
 const SDC_APPLY: u32 = 0x00000080;
 const QDC_ONLY_ACTIVE_PATHS: u32 = 0x00000002;
+const DISP_CHANGE_SUCCESSFUL: i32 = 0;
+const DISP_CHANGE_RESTART: i32 = 1;
 
 #[link(name = "user32")]
 unsafe extern "system" {
@@ -245,27 +248,116 @@ fn apply_resolved_profile(profile: &DisplayProfile) -> Result<(), String> {
         }
     }
 
-    let flag = get_topology_flag(&profile.topology) | SDC_APPLY;
-    let topology_status = unsafe { SetDisplayConfig(0, ptr::null(), 0, ptr::null(), flag) };
-    if topology_status != 0 {
-        return Err(format!(
-            "failed to apply display topology with status code {}",
-            topology_status
-        ));
-    }
+    let enabled_displays: Vec<&DisplayConfig> = profile
+        .displays
+        .iter()
+        .filter(|display| display.enabled)
+        .collect();
+    let should_apply_topology = matches!(profile.topology, DisplayTopology::Clone)
+        && enabled_displays.len() > 1
+        && enabled_displays.len() == profile.displays.len();
 
-    for display in &profile.displays {
-        if display.enabled {
-            apply_single_display(display)?;
-        } else {
-            detach_display(display)?;
+    if should_apply_topology {
+        let flag = get_topology_flag(&profile.topology) | SDC_APPLY;
+        let topology_status = unsafe { SetDisplayConfig(0, ptr::null(), 0, ptr::null(), flag) };
+        if topology_status != 0 {
+            return Err(format!(
+                "failed to apply display topology with status code {}",
+                topology_status
+            ));
         }
     }
+
+    let primary_display_name = choose_primary_display(profile)?;
+    let normalized_profile = normalize_primary_layout(profile, &primary_display_name)?;
+
+    if let Some(primary_display) = normalized_profile
+        .displays
+        .iter()
+        .find(|display| display.device_name == primary_display_name)
+    {
+        stage_single_display(primary_display, true)?;
+    }
+
+    for display in &normalized_profile.displays {
+        if !display.enabled || display.device_name == primary_display_name {
+            continue;
+        }
+
+        stage_single_display(display, false)?;
+    }
+
+    for display in &normalized_profile.displays {
+        if display.enabled {
+            continue;
+        }
+
+        stage_detach_display(display)?;
+    }
+
+    commit_display_changes()?;
 
     Ok(())
 }
 
-fn apply_single_display(display_config: &DisplayConfig) -> Result<(), String> {
+fn choose_primary_display(profile: &DisplayProfile) -> Result<String, String> {
+    let enabled_displays: Vec<&DisplayConfig> = profile
+        .displays
+        .iter()
+        .filter(|display| display.enabled)
+        .collect();
+    if enabled_displays.is_empty() {
+        return Err(String::from("no enabled displays in profile"));
+    }
+
+    if let Some(current_primary) = query_primary_display_name() {
+        if enabled_displays
+            .iter()
+            .any(|display| display.device_name == current_primary)
+        {
+            return Ok(current_primary);
+        }
+    }
+
+    enabled_displays
+        .iter()
+        .min_by_key(|display| (display.position_x, display.position_y, &display.device_name))
+        .map(|display| display.device_name.clone())
+        .ok_or_else(|| String::from("no enabled displays in profile"))
+}
+
+fn normalize_primary_layout(
+    profile: &DisplayProfile,
+    primary_display_name: &str,
+) -> Result<DisplayProfile, String> {
+    let primary_display = profile
+        .displays
+        .iter()
+        .find(|display| display.enabled && display.device_name == primary_display_name)
+        .ok_or_else(|| {
+            format!(
+                "primary display '{}' is not enabled in the profile",
+                primary_display_name
+            )
+        })?;
+
+    let offset_x = primary_display.position_x;
+    let offset_y = primary_display.position_y;
+    let mut normalized = profile.clone();
+
+    for display in &mut normalized.displays {
+        if !display.enabled {
+            continue;
+        }
+
+        display.position_x -= offset_x;
+        display.position_y -= offset_y;
+    }
+
+    Ok(normalized)
+}
+
+fn stage_single_display(display_config: &DisplayConfig, set_primary: bool) -> Result<(), String> {
     let mut devmode: DEVMODEW = unsafe { std::mem::zeroed() };
     devmode.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
     devmode.dmPelsWidth = display_config.width;
@@ -286,19 +378,23 @@ fn apply_single_display(display_config: &DisplayConfig) -> Result<(), String> {
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect();
+    let mut flags = CDS_UPDATEREGISTRY | CDS_NORESET;
+    if set_primary {
+        flags |= CDS_SET_PRIMARY;
+    }
     let status = unsafe {
         ChangeDisplaySettingsExW(
             device_w.as_ptr(),
             &mut devmode,
             ptr::null_mut(),
-            CDS_UPDATEREGISTRY | CDS_RESET,
+            flags,
             ptr::null_mut(),
         )
     };
 
-    if status != 0 {
+    if !is_display_change_success(status) {
         return Err(format!(
-            "failed to apply settings for '{}' with status code {}",
+            "failed to stage settings for '{}' with status code {}",
             display_config.device_name, status
         ));
     }
@@ -306,7 +402,7 @@ fn apply_single_display(display_config: &DisplayConfig) -> Result<(), String> {
     Ok(())
 }
 
-fn detach_display(display_config: &DisplayConfig) -> Result<(), String> {
+fn stage_detach_display(display_config: &DisplayConfig) -> Result<(), String> {
     let mut devmode: DEVMODEW = unsafe { std::mem::zeroed() };
     devmode.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
     devmode.dmPelsWidth = 0;
@@ -328,19 +424,44 @@ fn detach_display(display_config: &DisplayConfig) -> Result<(), String> {
             device_w.as_ptr(),
             &mut devmode,
             ptr::null_mut(),
-            CDS_UPDATEREGISTRY,
+            CDS_UPDATEREGISTRY | CDS_NORESET,
             ptr::null_mut(),
         )
     };
 
-    if status != 0 {
+    if !is_display_change_success(status) {
         return Err(format!(
-            "failed to detach display '{}' with status code {}",
+            "failed to stage detach for '{}' with status code {}",
             display_config.device_name, status
         ));
     }
 
     Ok(())
+}
+
+fn commit_display_changes() -> Result<(), String> {
+    let status = unsafe {
+        ChangeDisplaySettingsExW(
+            ptr::null(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            0,
+            ptr::null_mut(),
+        )
+    };
+
+    if !is_display_change_success(status) {
+        return Err(format!(
+            "failed to commit display changes with status code {}",
+            status
+        ));
+    }
+
+    Ok(())
+}
+
+fn is_display_change_success(status: i32) -> bool {
+    status == DISP_CHANGE_SUCCESSFUL || status == DISP_CHANGE_RESTART
 }
 
 fn query_all_display_names() -> Vec<String> {
@@ -403,6 +524,38 @@ fn query_current_display_names() -> Vec<String> {
     }
 
     names
+}
+
+fn query_primary_display_name() -> Option<String> {
+    let mut device_num = 0;
+
+    loop {
+        let mut device: DISPLAY_DEVICEW = unsafe { std::mem::zeroed() };
+        device.cb = std::mem::size_of::<DISPLAY_DEVICEW>() as u32;
+        let success = unsafe {
+            EnumDisplayDevicesW(
+                ptr::null(),
+                device_num,
+                &mut device,
+                EDD_GET_DEVICE_INTERFACE_NAME,
+            )
+        };
+        if success == 0 {
+            break;
+        }
+
+        if device.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE != 0 {
+            return Some(
+                String::from_utf16_lossy(&device.DeviceName)
+                    .trim_end_matches('\0')
+                    .to_string(),
+            );
+        }
+
+        device_num += 1;
+    }
+
+    None
 }
 
 fn merge_display_config(
