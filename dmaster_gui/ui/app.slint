@@ -26,6 +26,7 @@ export component App inherits Window {
     preferred-width: 860px;
     preferred-height: 560px;
     background: #1e1f22;
+    forward-focus: key-handler;
 
     in-out property <[ProfileEntry]> profiles;
     in-out property <[DisplayEntry]> selected-displays;
@@ -151,7 +152,7 @@ export component App inherits Window {
                                 alignment: center;
 
                                 Text {
-                                    text: profile.name;
+                                    text: (i < 3 ? (i == 0 ? "[1] " : i == 1 ? "[2] " : "[3] ") : "") + profile.name;
                                     font-size: 13px;
                                     font-weight: 600;
                                     color: i == root.selected-index ? #e0e0e0 : #b0b0b0;
@@ -503,6 +504,27 @@ export component App inherits Window {
             output-toggled(row-idx, enabled) => {
                 root.mapping-output-toggled(row-idx, enabled);
             }
+        }
+    }
+
+    key-handler := FocusScope {
+        x: 0; y: 0; width: 0; height: 0;
+        key-pressed(event) => {
+            if event.modifiers.control {
+                if event.text == "1" && root.profiles.length >= 1 {
+                    root.request-apply(root.profiles[0].name);
+                    return accept;
+                }
+                if event.text == "2" && root.profiles.length >= 2 {
+                    root.request-apply(root.profiles[1].name);
+                    return accept;
+                }
+                if event.text == "3" && root.profiles.length >= 3 {
+                    root.request-apply(root.profiles[2].name);
+                    return accept;
+                }
+            }
+            reject
         }
     }
 
